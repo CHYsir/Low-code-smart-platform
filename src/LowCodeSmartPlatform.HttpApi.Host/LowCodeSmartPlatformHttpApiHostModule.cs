@@ -28,6 +28,10 @@ using Volo.Abp.Modularity;
 using Volo.Abp.Swashbuckle;
 using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
+using Swashbuckle.AspNetCore.Filters;
+using Microsoft.IdentityModel.Tokens;
+using LowCodeSmartPlatform.Jwt;
+using System.Text;
 
 namespace LowCodeSmartPlatform
 {
@@ -115,36 +119,82 @@ namespace LowCodeSmartPlatform
             });
         }
 
+
+        //第二个需要改的地方:
         private void ConfigureAuthentication(ServiceConfigurationContext context, IConfiguration configuration)
         {
             context.Services.AddAuthentication()
                 .AddJwtBearer(options =>
                 {
-                    options.Authority = configuration["AuthServer:Authority"];
-                    options.RequireHttpsMetadata = Convert.ToBoolean(configuration["AuthServer:RequireHttpsMetadata"]);
-                    options.Audience = "LowCodeSmartPlatform";
+                    // 此处为我们复制的代码
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,//是否验证Issuer
+                        ValidateAudience = true,//是否验证Audience
+                        ValidateLifetime = true,//是否验证失效时间
+                        ClockSkew = TimeSpan.FromSeconds(30),
+                        ValidateIssuerSigningKey = true,//是否验证SecurityKey
+                        ValidAudience = Const.Aduience,//Audience
+                        ValidIssuer = Const.Issuer,//Issuer，这两项和前面签发jwt的设置一致
+                        IssuerSigningKey = new
+                       SymmetricSecurityKey(Encoding.UTF8.GetBytes(Const.SecurityKey))
+                    };
+                    //这是Abp框架自带的验证，我们先给他注释了，使用我们自己的
+                    //options.Authority = configuration["AuthServer:Authority"];
+                    //options.RequireHttpsMetadata = Convert.ToBoolean(configuration["AuthServer:RequireHttpsMetadata"]);
+                    //options.Audience = "LowCodeSmartPlatform";
                     options.BackchannelHttpHandler = new HttpClientHandler
                     {
                         ServerCertificateCustomValidationCallback =
                             HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
                     };
+
+
                 });
         }
 
+
+        //第一个需要改的地方：
         private static void ConfigureSwaggerServices(ServiceConfigurationContext context, IConfiguration configuration)
         {
-            context.Services.AddAbpSwaggerGenWithOAuth(
-                configuration["AuthServer:Authority"],
-                new Dictionary<string, string>
+           context.Services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new OpenApiInfo { Title = "Backstage.management.system.Api", Version = "v1" });
+                options.DocInclusionPredicate((docName, description) => true);
+                options.CustomSchemaIds(type => type.FullName);
+
+
+                #region swagger 用 Jwt验证
+                //开启权限小锁
+                options.OperationFilter<AddResponseHeadersFilter>();
+                options.OperationFilter<AppendAuthorizeToSummaryOperationFilter>();
+                //在header中添加token，传递到后台
+                options.OperationFilter<SecurityRequirementsOperationFilter>();
+                options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
                 {
-                    {"LowCodeSmartPlatform", "LowCodeSmartPlatform API"}
-                },
-                options =>
-                {
-                    options.SwaggerDoc("v1", new OpenApiInfo {Title = "LowCodeSmartPlatform API", Version = "v1"});
-                    options.DocInclusionPredicate((docName, description) => true);
-                    options.CustomSchemaIds(type => type.FullName);
+                    Description = "JWT授权(数据将在请求头中进行传递)直接在下面框中输入Bearer{ token }(注意两者之间是一个空格) \"",
+                    Name = "Authorization",//jwt默认的参数名称
+                    In = ParameterLocation.Header,//jwt默认存放Authorization信息的位置(请求头中)
+                    Type = SecuritySchemeType.ApiKey
                 });
+                #endregion
+            });
+
+
+            //注释了自带的小锁
+            //context.Services.AddAbpSwaggerGenWithOAuth(
+            //      configuration["AuthServer:Authority"],
+            //      new Dictionary<string, string>
+            //      {
+            //          {"LowCodeSmartPlatform", "LowCodeSmartPlatform API"}
+            //      },
+            //      options =>
+            //      {
+            //          options.SwaggerDoc("v1", new OpenApiInfo { Title = "LowCodeSmartPlatform API", Version = "v1" });
+            //          options.DocInclusionPredicate((docName, description) => true);
+            //          options.CustomSchemaIds(type => type.FullName);
+            //      }
+
         }
 
         private void ConfigureLocalization()
@@ -177,21 +227,21 @@ namespace LowCodeSmartPlatform
         {
             context.Services.AddCors(options =>
             {
-                options.AddDefaultPolicy( builder =>
-                {
-                    builder
-                        .WithOrigins(
-                            configuration["App:CorsOrigins"]
-                                .Split(",", StringSplitOptions.RemoveEmptyEntries)
-                                .Select(o => o.RemovePostFix("/"))
-                                .ToArray()
-                        )
-                        .WithAbpExposedHeaders()
-                        .SetIsOriginAllowedToAllowWildcardSubdomains()
-                        .AllowAnyHeader()
-                        .AllowAnyMethod()
-                        .AllowCredentials();
-                });
+                options.AddDefaultPolicy(builder =>
+               {
+                   builder
+                       .WithOrigins(
+                           configuration["App:CorsOrigins"]
+                               .Split(",", StringSplitOptions.RemoveEmptyEntries)
+                               .Select(o => o.RemovePostFix("/"))
+                               .ToArray()
+                       )
+                       .WithAbpExposedHeaders()
+                       .SetIsOriginAllowedToAllowWildcardSubdomains()
+                       .AllowAnyHeader()
+                       .AllowAnyMethod()
+                       .AllowCredentials();
+               });
             });
         }
 
@@ -216,7 +266,10 @@ namespace LowCodeSmartPlatform
             app.UseStaticFiles();
             app.UseRouting();
             app.UseCors();
+
+            //验证（abp自带）
             app.UseAuthentication();
+
             app.UseJwtTokenMiddleware();
 
             if (MultiTenancyConsts.IsEnabled)
@@ -226,6 +279,8 @@ namespace LowCodeSmartPlatform
 
             app.UseUnitOfWork();
             app.UseIdentityServer();
+
+            //授权（abp自带）
             app.UseAuthorization();
 
             app.UseSwagger();

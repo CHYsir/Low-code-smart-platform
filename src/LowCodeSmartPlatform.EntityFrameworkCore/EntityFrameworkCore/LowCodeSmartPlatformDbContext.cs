@@ -56,6 +56,10 @@ namespace LowCodeSmartPlatform.EntityFrameworkCore
 
         #region 添加DbSet属性
         public DbSet<MemberModel>   Members { get; set; }
+        public DbSet<RoleModel>  RoleModels { get; set; }
+        public DbSet<MenuModel>  MenuModels { get; set; }
+        public DbSet<RoleMenuModel> RoleMenuModels { get; set; }
+        public DbSet<MemberRoleModel> MemberRoleModels { get; set; }
         #endregion
 
         public LowCodeSmartPlatformDbContext(DbContextOptions<LowCodeSmartPlatformDbContext> options)
