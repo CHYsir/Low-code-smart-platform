@@ -11,6 +11,7 @@ namespace LowCodeSmartPlatform.Dto
         /// </summary>
         public string MenuName { get; set; }
 
+
         /// <summary>
         /// 菜单子集
         /// </summary>
