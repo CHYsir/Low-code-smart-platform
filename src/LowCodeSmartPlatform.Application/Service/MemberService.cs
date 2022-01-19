@@ -30,17 +30,17 @@ namespace LowCodeSmartPlatform.Service
         #region  自定义增删改查(写法有很多，思路要开阔)
         //当成功时，调用IsSuccess(...)方法，当失败时，调用IsFailed(...)方法。最终我们返回的是new ServiceResult()或者new ServiceResult<T>()对象。
 
-        ////删
-        //[HttpGet,Route("delete")]
-        //public async Task<ServiceResult> DeleteMemberAsync(int id)
-        //{
-        //    var result = new ServiceResult();
+        //删
+        [HttpGet, Route("delete")]
+        public async Task<ServiceResult> DeleteMemberAsync(int id)
+        {
+            var result = new ServiceResult();
 
-        //    await _repository.DeleteAsync(id);
+            await _repository.DeleteAsync(id);
 
-        //    result.IsSuccess("删除成功！");
-        //    return result;
-        //}
+            result.IsSuccess("删除成功！");
+            return result;
+        }
 
         ////查
         //[HttpGet,Route("select")]
